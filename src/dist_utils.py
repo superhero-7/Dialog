@@ -156,6 +156,7 @@ def all_gather(data, group=None):
     Returns:
         list[data]: list of data gathered from each rank
     """
+
     if get_world_size() == 1:
         return [data]
     if group is None:

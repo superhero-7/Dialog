@@ -408,6 +408,7 @@ class VLT5(T5ForConditionalGeneration):
         self.encoder.embed_tokens = self.shared
         self.decoder.embed_tokens = self.shared
 
+        # tie_word_embeddings key point is here!
         self.lm_head.weight = self.shared.weight
 
         self.config.vocab_size = vocab_size
@@ -472,7 +473,7 @@ class VLT5(T5ForConditionalGeneration):
                     encoder_outputs) > 2 else None,
             )
 
-        hidden_states = encoder_outputs[0]
+        hidden_states = encoder_outputs[0] # (B,42, 768) 42=37+5[vis_token + input_tokens]
 
         if labels is not None and decoder_input_ids is None and decoder_inputs_embeds is None:
             # get decoder inputs from shifting lm labels to the right
@@ -493,7 +494,7 @@ class VLT5(T5ForConditionalGeneration):
             B, L = attention_mask.size()
             V_L = encoder_outputs[0].size(1) - L
             vis_attention_mask = attention_mask.new_ones(B, V_L)
-        encoder_attention_mask = torch.cat([attention_mask, vis_attention_mask], dim=1)
+        encoder_attention_mask = torch.cat([attention_mask, vis_attention_mask], dim=1) # input_ids是在前面的, vis在后面
 
         # Decode
         decoder_outputs = self.decoder(
@@ -514,7 +515,7 @@ class VLT5(T5ForConditionalGeneration):
         # print('decoder_outputs')
         # print(decoder_outputs)
 
-        sequence_output = decoder_outputs[0]
+        sequence_output = decoder_outputs[0] # (192, 19, 768)
 
         assert self.config.tie_word_embeddings is True
 

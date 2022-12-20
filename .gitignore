@@ -1,2 +1,9 @@
 wandb
 snap
+src/refer2/evaluation/bleu/*
+src/refer2/evaluation/cider/*
+src/__pycache__/
+src/feature_extraction/__pycache__/
+generate_result/
+output.txt
+src/new_generate_sent_set/*

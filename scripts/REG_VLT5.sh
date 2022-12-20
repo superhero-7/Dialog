@@ -1,38 +1,46 @@
 # The name of experiment
-export CUDA_VISIBLE_DEVICES=0
-name=vlt5_reg_new
+gpu0=$4
+gpu1=$5
+export CUDA_VISIBLE_DEVICES=$gpu0,$gpu1
+name=ddl_reg_negative_text_training_from_pretrained
 dataset=$2
 split=$3
+# mmi_margin=$4
 
 output=snap/$dataset/$name
 
 PYTHONPATH=$PYTHONPATH:./src \
 python -m torch.distributed.launch \
     --nproc_per_node=$1 \
+    --master_port=$6 \
     src/reg.py \
         --distributed --multiGPU \
         --train train \
         --valid val \
         --test test \
         --optim adamw \
-        --warmup_ratio 0.1 \
+        --warmup_ratio 0.15 \
         --clip_grad_norm 5 \
         --lr 5e-5 \
-        --epochs 3 \
+        --epochs 30 \
         --num_workers 4 \
         --backbone 't5-base' \
         --output $output \
-        --load /raid_sda/yfl/codebase/VL-T5-REG/VL-T5/snap/pretrain/VLT5/Epoch30 \
+        --load /sharefs/baai-mrnd/yfl/codebase/Dialog/snap/pretrain/VLT5/Epoch30 \
         --num_beams 5 \
-        --batch_size 512 \
+        --batch_size 160 \
         --valid_batch_size 32 \
         --dataset $dataset\
         --dataset_split $split\
         --experiment_name $name\
         --hyperparameter_search\
         --mode 'train' \
-        # --no_evaluate \
+        --use_rec \
+        --use_negative_text_training \
+        --negative_text_training_data /sharefs/baai-mrnd/yfl/codebase/Dialog/src/new_generate_sent_set/ddl_vlt5_reg_baseline/refcoco+/ddl_vlt5_reg_baseline_refcoco+_bad_sent_threshold_0.5_with_bbox.json \
         # --use_mmi \
+        # --mmi_margin $mmi_margin \
+        # --no_evaluate \
         # --use_detector \
         # --debug\
         # --dialog_sp_training\
@@ -49,4 +57,3 @@ python -m torch.distributed.launch \
         # --rl_training\
         # --debug\
         # --use_mmi \
-

@@ -41,22 +41,22 @@ D2_ROOT = os.path.dirname(os.path.dirname(
 # min_caption_len = 2
 DIM = 2048
 
-# Load VG Classes
-data_path = 'demo/data/genome/1600-400-20'
+# # Load VG Classes
+# data_path = 'demo/data/genome/1600-400-20'
 
-# vg_classes is a list of 1600 different classes
-vg_classes = []
-with open(os.path.join(D2_ROOT, data_path, 'objects_vocab.txt')) as f:
-    for object in f.readlines():
-        vg_classes.append(object.split(',')[0].lower().strip())
+# # vg_classes is a list of 1600 different classes
+# vg_classes = []
+# with open(os.path.join(D2_ROOT, data_path, 'objects_vocab.txt')) as f:
+#     for object in f.readlines():
+#         vg_classes.append(object.split(',')[0].lower().strip())
 
-# vg_attrs is a list of 400 different attributes
-vg_attrs = []
-with open(os.path.join(D2_ROOT, data_path, 'attributes_vocab.txt')) as f:
-    for object in f.readlines():
-        vg_attrs.append(object.split(',')[0].lower().strip())
-MetadataCatalog.get("vg").thing_classes = vg_classes
-MetadataCatalog.get("vg").attr_classes = vg_attrs
+# # vg_attrs is a list of 400 different attributes
+# vg_attrs = []
+# with open(os.path.join(D2_ROOT, data_path, 'attributes_vocab.txt')) as f:
+#     for object in f.readlines():
+#         vg_attrs.append(object.split(',')[0].lower().strip())
+# MetadataCatalog.get("vg").thing_classes = vg_classes
+# MetadataCatalog.get("vg").attr_classes = vg_attrs
 
 
 def doit(raw_image, raw_boxes, predictor):
@@ -146,6 +146,7 @@ def extract(output_fname, dataloader, desc):
                                  ncols=150,
                                  total=len(dataloader)):
 
+                uni_ids = batch['uni_ids']
                 ref_ids = batch['ref_ids']
                 img_ids = batch['img_ids']
                 # feat_list, info_list = feature_extractor.get_detectron_features(batch)
@@ -157,6 +158,7 @@ def extract(output_fname, dataloader, desc):
 
                 # 这里能这么取是因为batch其实就是1
                 img = imgs[0]
+                uni_id = uni_ids[0]
                 img_id = img_ids[0]
                 ref_id = ref_ids[0]
                 boxes = boxes[0]
@@ -172,7 +174,7 @@ def extract(output_fname, dataloader, desc):
                 # assert num_objects == NUM_OBJECTS
                 # assert features.shape == (NUM_OBJECTS, dim)
 
-                grp = f.create_group(ref_id)
+                grp = f.create_group(uni_id)
                 grp['features'] = features.numpy()  # [num_features, 2048]
                 grp['obj_id'] = instances.pred_classes.numpy()
                 grp['obj_conf'] = instances.scores.numpy()
@@ -183,6 +185,7 @@ def extract(output_fname, dataloader, desc):
                 grp['img_h'] = img.shape[0]
                 grp['num_objects'] = num_objects
                 grp['ref_id'] = ref_id
+                grp['uni_id'] = uni_id
 
 
                 if 'captions' in batch:

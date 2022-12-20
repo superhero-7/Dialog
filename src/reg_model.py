@@ -1,23 +1,23 @@
 import torch
 import torch.nn as nn
 import copy
-from memory_profiler import profile
+# from memory_profiler import profile
 from undecorated import undecorated
 from types import MethodType
 from torch.nn import NLLLoss, CrossEntropyLoss
 import os.path as osp
 import sys
-if osp.join('/workspace/yfl/codebase/retr/pyutils', 'refer2', 'evaluation') not in sys.path:
-    sys.path.insert(0, osp.join('/workspace/yfl/codebase/retr/pyutils', 'refer2', 'evaluation'))
+if osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src', 'refer2', 'evaluation') not in sys.path:
+    sys.path.insert(0, osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src', 'refer2', 'evaluation'))
 from cider.cider import Cider
 from tokenizer.ptbtokenizer import PTBTokenizer
 from transformers import LogitsProcessorList, TopKLogitsWarper, TemperatureLogitsWarper
 
 
-if osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction') not in sys.path:
-    sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction'))
+# if osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction') not in sys.path:
+#     sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction'))
 
-from detectron2_given_target_box_maxnms import doit, build_model
+# from detectron2_given_target_box_maxnms import doit, build_model
 import cv2
 # cv2.setNumThreads(0)
 
@@ -30,7 +30,7 @@ class VLT5REG(VLT5):
         super().__init__(config)
 
     # @profile
-    def train_step(self, batch, use_mmi=False, epoch=None, lama=1, margin=0.5):
+    def train_step(self, batch, use_mmi=False, epoch=None, lama=1, margin=0.5, use_negative_text_training=False):
 
         device = next(self.parameters()).device
         if use_mmi:
@@ -66,9 +66,51 @@ class VLT5REG(VLT5):
             neg_loss = neg_output['loss']
 
             # 这里一会改还不知道能不能跑起来...
-            if epoch % 10 == 0:
-                margin /= 2
+            # if epoch % 10 == 0:
+            #     margin /= 2
             loss = pos_loss + lama * (max(0, margin + pos_loss - neg_loss))
+
+            result = {
+                'loss': loss
+            }
+            return result
+        elif use_negative_text_training:
+            vis_feats = batch['vis_feats'].to(device)
+            input_ids = batch['input_ids'].to(device)
+            vis_pos = batch['boxes'].to(device)
+
+            lm_labels = batch["target_ids"].to(device)
+            negative_labels = batch["negative_sent_ids"].to(device)
+
+            reduce_loss = True
+            output = self(
+                input_ids=input_ids,
+                vis_inputs=(vis_feats, vis_pos),
+                labels=lm_labels,
+                reduce_loss=reduce_loss
+            )
+
+            # 这个地方可以优化计算但是我现在先不优化
+            neg_output = self(
+                input_ids=input_ids,
+                vis_inputs=(vis_feats, vis_pos),
+                labels=negative_labels,
+                reduce_loss=reduce_loss
+            )
+
+            lm_mask = lm_labels != -100
+            B, L = lm_labels.size()
+
+            pos_loss = output['loss']
+            neg_loss = neg_output['loss']
+
+            # 这里一会改还不知道能不能跑起来...
+            # if epoch % 10 == 0:
+            #     margin /= 2
+            loss = pos_loss + lama * (max(0, margin + pos_loss - neg_loss))
+            # import pdb
+            # pdb.set_trace()
+            # loss = torch.mean(pos_loss + lama * (torch.clamp(margin + pos_loss - neg_loss, min=0.0)))
 
             result = {
                 'loss': loss
@@ -480,7 +522,7 @@ class VLT5REG(VLT5):
 
         return reslut
 
-    @profile(precision=4,stream=open('memory_profiler.log','w+'))
+    # @profile(precision=4,stream=open('memory_profiler.log','w+'))
     def test_step(self, batch, dialog_training=False, dialog_round=1, last_round=True,**kwargs):
         device = next(self.parameters()).device
         vis_feats = batch['vis_feats'].to(device)

@@ -4,8 +4,8 @@ import os
 import os.path as osp
 import sys
 
-if osp.join('/raid_sda/yfl/codebase/', 'OFA') not in sys.path:
-    sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/', 'OFA'))
+if osp.join('/sharefs/baai-mrnd/yfl/codebase', 'OFA') not in sys.path:
+    sys.path.insert(0, osp.join('/sharefs/baai-mrnd/yfl/codebase', 'OFA'))
 # if osp.join('/home/yfl/', 'OFA') not in sys.path:
 #     sys.path.insert(0, osp.join('/home/yfl/', 'OFA'))
 
@@ -46,11 +46,11 @@ import wandb
 from pprint import pformat
 from trainer_base import TrainerBase2
 from refcoco_utils import REFER
-from memory_profiler import profile
+# from memory_profiler import profile
 
 # 一直觉得这种写法看起来就不是很优雅~
-if osp.join('/raid_sda/yfl/codebase/VL-T5-REG/VL-T5/src/', 'refer2/evaluation') not in sys.path:
-    sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/VL-T5-REG/VL-T5/src/', 'refer2/evaluation'))
+if osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src', 'refer2/evaluation') not in sys.path:
+    sys.path.insert(0, osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src', 'refer2/evaluation'))
 # if osp.join('/home/yfl/catr/pyutils', 'refer2', 'evaluation') not in sys.path:
 #     sys.path.insert(0, osp.join('/home/yfl/catr/pyutils', 'refer2', 'evaluation'))
 from refEvaluation import RefEvaluation
@@ -75,10 +75,10 @@ else:
     _use_native_amp = True
     from torch.cuda.amp import autocast
 
-if osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction') not in sys.path:
-    sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction'))
+# if osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction') not in sys.path:
+#     sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction'))
 
-from detectron2_given_target_box_maxnms import doit, build_model
+# from detectron2_given_target_box_maxnms import doit, build_model
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -98,15 +98,15 @@ class Critic():
         self.use_fp16 = False
 
         # Load pretrained ckpt & config
-        overrides = {"bpe_dir": "/raid_sda/yfl/codebase/OFA/utils/BPE"}
+        overrides = {"bpe_dir": "/sharefs/baai-mrnd/yfl/codebase/OFA/utils/BPE"}
         # overrides = {"bpe_dir": "/home/yfl/OFA/utils/BPE"}
         if self.args.dataset in ['refcoco', 'refcocog']:
-            ofa_checkepoint_path = '/raid_sda/yfl/codebase/OFA/checkpoints/' + \
+            ofa_checkepoint_path = '/sharefs/baai-mrnd/yfl/codebase/OFA/checkpoints/' + \
                                self.args.dataset+'_base_best.pt'
             # ofa_checkepoint_path = '/home/yfl/OFA/checkpoints/' + \
             #                    self.args.dataset+'_base_best.pt'
         elif self.args.dataset =='refcoco+':
-            ofa_checkepoint_path = '/raid_sda/yfl/codebase/OFA/checkpoints/' + \
+            ofa_checkepoint_path = '/sharefs/baai-mrnd/yfl/codebase/OFA/checkpoints/' + \
                                    'refcocoplus' + '_base_best.pt'
             # ofa_checkepoint_path = '/home/yfl/OFA/checkpoints/' + \
             #                        'refcocoplus' + '_base_best.pt'
@@ -211,7 +211,7 @@ class Critic():
         samples = []
 
         for image_id, refBox, sent in zip(image_ids, refBoxes, sents):
-            img_path = '/raid_sda/yfl/datasets/train2014/COCO_train2014_' + str(image_id).zfill(12) + '.jpg'
+            img_path = '/sharefs/baai-mrnd/yfl/database/train2014/train2014/COCO_train2014_' + str(image_id).zfill(12) + '.jpg'
             # img_path = '/home/yfl/datasets/train2014/COCO_train2014_' + str(image_id).zfill(12) + '.jpg'
             image = Image.open(img_path)
             sample = self.construct_sample(image, sent, image_id, refBox)
@@ -346,7 +346,7 @@ class Trainer(TrainerBase2):
         if self.args.use_detector:
             self.detector = build_model()
 
-    @profile(precision=4,stream=open('memory_profiler.log','w+')) 
+    # @profile(precision=4,stream=open('memory_profiler.log','w+')) 
     def train(self):
         if self.verbose:
             loss_meter = LossMeter()
@@ -417,7 +417,7 @@ class Trainer(TrainerBase2):
                                 results = self.model.module.dialog_train_step(batch, self.critic, self.args.dialog_round)
                             else:
                                 results = self.model.module.train_step(batch, self.args.use_mmi,
-                                                                   epoch=epoch, lama=self.args.lama, margin=self.args.margin)
+                                                                   epoch=epoch, lama=self.args.lama, margin=self.args.margin, use_negative_text_training=self.args.use_negative_text_training)
                         else:
                             if self.args.rl_training:
                                 if self.args.use_rec:
@@ -428,7 +428,7 @@ class Trainer(TrainerBase2):
                                 results = self.model.module.dialog_train_step(batch, self.critic, self.args.dialog_round)
                             else:
                                 results = self.model.train_step(batch, self.args.use_mmi,
-                                                            epoch=epoch, lama=self.args.lama, margin=self.args.margin)
+                                                            epoch=epoch, lama=self.args.lama, margin=self.args.margin, use_negative_text_training=self.args.use_negative_text_training)
                 else:
                     if self.args.distributed:
                         if self.args.rl_training:
@@ -439,7 +439,7 @@ class Trainer(TrainerBase2):
                         elif self.args.dialog_training:
                             results = self.model.module.dialog_train_step(batch, self.critic, self.args.dialog_round)
                         else:
-                            results = self.model.module.train_step(batch, self.args.use_mmi, epoch=epoch)
+                            results = self.model.module.train_step(batch, self.args.use_mmi, epoch=epoch, margin=self.args.mmi_margin, use_negative_text_training=self.args.use_negative_text_training)
                     else:
                         if self.args.rl_training:
                             if self.args.use_rec:
@@ -449,7 +449,7 @@ class Trainer(TrainerBase2):
                         elif self.args.dialog_training:
                             results = self.model.module.dialog_train_step(batch, self.critic, self.args.dialog_round)
                         else:
-                            results = self.model.train_step(batch, self.args.use_mmi, epoch=epoch)
+                            results = self.model.train_step(batch, self.args.use_mmi, epoch=epoch, margin=self.args.mmi_margin, use_negative_text_training=self.args.use_negative_text_training)
 
                 loss = results['loss']
 
@@ -566,64 +566,68 @@ class Trainer(TrainerBase2):
                 pbar.close()
 
             if self.verbose:
-                # wandb_log_dict = {}
-                # wandb_log_dict['Train/Loss'] = epoch_results['loss'] / len(self.train_loader)
-                if not self.args.no_evaluate:
-                    valid_results, valid_pred = self.evaluate(self.val_loader)
-                    valid_score = valid_results['CIDEr']
+                wandb_log_dict = {}
+                wandb_log_dict['Train/Loss'] = epoch_results['loss'] / len(self.train_loader)
+            if not self.args.no_evaluate:
+                valid_results, valid_pred = self.evaluate(self.val_loader)
 
+                if self.verbose:
+                    valid_score = valid_results['CIDEr']
                     if valid_score > best_valid or epoch == 0:
                         best_valid = valid_score
                         best_epoch = epoch
-                        # self.save("BEST")
+                        self.save("BEST")
 
-                    log_str = ''
+                        log_str = ''
 
-                    valid_results_for_pprint = {'CIDEr': valid_results['CIDEr'],
-                                               'METEOR': valid_results['METEOR']}
-                    log_str += pformat(valid_results_for_pprint)
-                    log_str += "\nEpoch %d: Valid CIDEr %0.4f" % (epoch, valid_score)
-                    log_str += "\nEpoch %d: Best CIDEr %0.4f\n" % (best_epoch, best_valid)
+                        valid_results_for_pprint = {'CIDEr': valid_results['CIDEr'],
+                                                'METEOR': valid_results['METEOR']}
+                        log_str += pformat(valid_results_for_pprint)
+                        log_str += "\nEpoch %d: Valid CIDEr %0.4f" % (epoch, valid_score)
+                        log_str += "\nEpoch %d: Best CIDEr %0.4f\n" % (best_epoch, best_valid)
 
-                    # if not self.args.debug:
-                    #     if self.args.rl_training:
-                    #         wandb_log_dict['Train/sample_reward'] = epoch_results['sample_reward'] / len(self.train_loader)
-                    #         wandb_log_dict['Train/reward'] = epoch_results['reward'] / len(self.train_loader)
-                    #         if not self.args.use_rec:
-                    #             wandb_log_dict['Train/reward_baseline'] = epoch_results['reward_baseline'] / len(self.train_loader)
+                if not self.args.debug:
+                    if self.args.rl_training and self.verbose:
+                        wandb_log_dict['Train/sample_reward'] = epoch_results['sample_reward'] / len(self.train_loader)
+                        wandb_log_dict['Train/reward'] = epoch_results['reward'] / len(self.train_loader)
+                        if not self.args.use_rec:
+                            wandb_log_dict['Train/reward_baseline'] = epoch_results['reward_baseline'] / len(self.train_loader)
 
-                    # 实在不行就先不测这一块看一下
-                    if self.args.dataset == 'refcocog':
-                        if not self.args.debug:
-                            test_results_during_train, _ = self.evaluate(self.test_loaderA)
-                            # for score_name, score in test_results_during_train.items():
-                            #     if not (type(score) is np.ndarray):
-                            #         wandb_log_dict[f'Train/Test_{score_name}'] = score
-                    else:
-                        if not self.args.debug:
-                            test_results_during_trainA, _ = self.evaluate(self.test_loaderA)
-                            test_results_during_trainB, _ = self.evaluate(self.test_loaderB)
-                            # for score_name, score in test_results_during_trainA.items():
-                            #     if not (type(score) is np.ndarray):
-                            #         wandb_log_dict[f'Train/TestA_{score_name}'] = score
+                # 实在不行就先不测这一块看一下
+                if self.args.dataset == 'refcocog':
+                    if not self.args.debug:
+                        test_results_during_train, _ = self.evaluate(self.test_loaderA)
+                        if self.verbose:
+                            for score_name, score in test_results_during_train.items():
+                                if not (type(score) is np.ndarray):
+                                    wandb_log_dict[f'Train/Test_{score_name}'] = score
+                else:
+                    if not self.args.debug:
+                        test_results_during_trainA, _ = self.evaluate(self.test_loaderA)
+                        test_results_during_trainB, _ = self.evaluate(self.test_loaderB)
+                        if self.verbose:
+                            for score_name, score in test_results_during_trainA.items():
+                                if not (type(score) is np.ndarray):
+                                    wandb_log_dict[f'Train/TestA_{score_name}'] = score
 
-                            # for score_name, score in test_results_during_trainB.items():
-                            #     if not (type(score) is np.ndarray):
-                            #         wandb_log_dict[f'Train/TestB_{score_name}'] = score
+                            for score_name, score in test_results_during_trainB.items():
+                                if not (type(score) is np.ndarray):
+                                    wandb_log_dict[f'Train/TestB_{score_name}'] = score
 
-                    # if not self.args.debug:
-                    #     for score_name, score in valid_results.items():
-                    #         if not (type(score) is np.ndarray):
-                    #             wandb_log_dict[f'Valid/{score_name}'] = score
+                if not self.args.debug and self.verbose:
+                    for score_name, score in valid_results.items():
+                        if not (type(score) is np.ndarray):
+                            wandb_log_dict[f'Valid/{score_name}'] = score
 
-                    #     wandb_log_dict[f'Valid/best_epoch'] = best_epoch
-                    #     wandb_log_dict['Train/epoch'] = epoch
+                    wandb_log_dict[f'Valid/best_epoch'] = best_epoch
+                    wandb_log_dict['Train/epoch'] = epoch
 
                     print(log_str)
 
-                # wandb.log(wandb_log_dict)
+            if self.verbose:
+                wandb.log(wandb_log_dict)
 
-                # self.save(str(epoch))
+                self.save(str(epoch))
 
             if self.args.distributed:
                 dist.barrier()
@@ -696,48 +700,50 @@ class Trainer(TrainerBase2):
         #     print(f'\nUploaded checkpoint {best_epoch}', best_path)
 
         if self.args.dataset == 'refcocog':
-            if self.verbose and (not self.args.debug) and (not self.args.no_evaluate):
+            if (not self.args.debug) and (not self.args.no_evaluate):
                 test_results, test_pred = self.evaluate(self.test_loaderA)
-                wandb_log_dict = {}
-                for score_name, score in test_results.items():
-                    if not (type(score) is np.ndarray):
-                        wandb_log_dict[f'Test/{score_name}'] = score
-                wandb.log(wandb_log_dict, step=epoch)
+                if self.verbose:
+                    wandb_log_dict = {}
+                    for score_name, score in test_results.items():
+                        if not (type(score) is np.ndarray):
+                            wandb_log_dict[f'Test/{score_name}'] = score
+                    wandb.log(wandb_log_dict, step=epoch)
 
-                log_str = 'Test set results\n'
-                test_results_for_pprint = {'CIDEr': test_results['CIDEr'],
-                                           'METEOR': test_results['METEOR']}
-                log_str += pformat(test_results_for_pprint)
+                    log_str = 'Test set results\n'
+                    test_results_for_pprint = {'CIDEr': test_results['CIDEr'],
+                                            'METEOR': test_results['METEOR']}
+                    log_str += pformat(test_results_for_pprint)
 
-                print(log_str)
+                    print(log_str)
         else:
-            if self.verbose and (not self.args.debug) and (not self.args.no_evaluate):
+            if (not self.args.debug) and (not self.args.no_evaluate):
                 test_resultsA, pred_testA = self.evaluate(self.test_loaderA)
                 test_resultsB, pred_testB = self.evaluate(self.test_loaderB)
-                wandb_log_dict = {}
-                for score_name, score in test_resultsA.items():
-                    if not (type(score) is np.ndarray):
-                        wandb_log_dict[f'Test/A_{score_name}'] = score
+                if self.verbose:
+                    wandb_log_dict = {}
+                    for score_name, score in test_resultsA.items():
+                        if not (type(score) is np.ndarray):
+                            wandb_log_dict[f'Test/A_{score_name}'] = score
 
-                for score_name, score in test_resultsB.items():
-                    if not (type(score) is np.ndarray):
-                        wandb_log_dict[f'Test/B_{score_name}'] = score
+                    for score_name, score in test_resultsB.items():
+                        if not (type(score) is np.ndarray):
+                            wandb_log_dict[f'Test/B_{score_name}'] = score
 
-                wandb.log(wandb_log_dict, step=epoch)
+                    wandb.log(wandb_log_dict, step=epoch)
 
-                log_str = 'Test set results\n'
-                test_results_for_pprintA = {'CIDEr': test_resultsA['CIDEr'],
-                                           'METEOR': test_resultsA['METEOR']}
-                test_results_for_pprintB = {'CIDEr': test_resultsB['CIDEr'],
-                                            'METEOR': test_resultsB['METEOR']}
-                log_str += pformat(test_results_for_pprintA)
-                log_str += pformat(test_results_for_pprintB)
+                    log_str = 'Test set results\n'
+                    test_results_for_pprintA = {'CIDEr': test_resultsA['CIDEr'],
+                                            'METEOR': test_resultsA['METEOR']}
+                    test_results_for_pprintB = {'CIDEr': test_resultsB['CIDEr'],
+                                                'METEOR': test_resultsB['METEOR']}
+                    log_str += pformat(test_results_for_pprintA)
+                    log_str += pformat(test_results_for_pprintB)
 
-                print(log_str)
+                    print(log_str)
 
         if self.args.distributed:
             dist.barrier()
-    @profile(precision=4,stream=open('memory_profiler.log','w+')) 
+    # @profile(precision=4,stream=open('memory_profiler.log','w+')) 
     def predict(self, loader):
         """
         Predict the answers to questions in a data split.
@@ -822,21 +828,19 @@ class Trainer(TrainerBase2):
                             **gen_kwargs)
 
                 predictions.extend(deepcopy(results))
+            
 
-            # emmmm...不知道这样写对不对
-            # if self.args.distributed:
-            #     print("Stuck in here")
-            #     dist.barrier()
-            #     print("Pass !!")
-            #     dist_results = dist_utils.all_gather(predictions)
-            #     predictions = []
-            #     for result in dist_results:
-            #         predictions.extend(result)
-            #     print("Pass 2")
+            # if you don't have the same
+            if self.args.distributed:
+                dist.barrier()
+                dist_results = dist_utils.all_gather(predictions)
+                predictions = []
+                for result in dist_results:
+                    predictions.extend(result)
 
             return predictions
             
-    @profile(precision=4,stream=open('memory_profiler.log','w+')) 
+    # @profile(precision=4,stream=open('memory_profiler.log','w+')) 
     def evaluate(self, loader, save_name=None):
 
         preds = self.predict(loader)
@@ -850,47 +854,47 @@ class Trainer(TrainerBase2):
         if not self.args.distributed:
             assert len(preds) == len(generate_res), 'The length does not match, prediction is{}, and generate_res is{}'.format(len(preds),
                                                                                                       len(generate_res))
-        # ofa_acc_sum = torch.FloatTensor([0]).cuda()
-        # ofa_acc_cnt = torch.FloatTensor([0]).cuda()
-        # ofa_score_recoder = {}
-        # with torch.no_grad():
-        #
-        #     for i, batch in enumerate(tqdm(loader, ncols=120, desc="ofa_evaluate", disable=not self.verbose)):
-        #         sample_dict = {}
-        #         sample_dict['image_ids'] = batch['image_ids']  # ids is a list of int
-        #         sample_dict['refBoxes'] = batch['refBoxes']
-        #         ref_ids = batch['ref_ids']
-        #
-        #         sample_sents = []
-        #         for ref_id in ref_ids:
-        #             sent = generate_res[ref_id]
-        #             sample_sents.append(sent)
-        #
-        #         sample_dict['sents'] = sample_sents  # a list of sent
-        #
-        #         if self.args.use_rec:
-        #             scores, _, _ = self.critic.compute_score(sample_dict, ofa_test=True, threshold=0.5)
-        #             ofa_acc_sum += sum(scores) if scores is not None else 0
-        #             ofa_acc_cnt += len(scores) if scores is not None else 0
-        #
-        #         for score, ref_id in zip(scores, ref_ids):
-        #             ofa_score_recoder[ref_id] = score.item()
-        #
-        #     if self.args.distributed:
-        #         dist.barrier()
-        #
-        #         ofa_acc_sum_for_dist = dist_utils.all_gather(ofa_acc_sum.item())
-        #         ofa_acc_cnt_for_dist = dist_utils.all_gather(ofa_acc_cnt.item())
-        #         ofa_score_recoder_for_dist = dist_utils.all_gather(ofa_score_recoder)
-        #         ofa_score_recoder_gather = {}
-        #         for dict in ofa_score_recoder_for_dist:
-        #             ofa_score_recoder_gather.update(dict)
-        #         ofa_acc_sum_gather = sum(ofa_acc_sum_for_dist)
-        #         ofa_acc_cnt_gather = sum(ofa_acc_cnt_for_dist)
-        #     else:
-        #         ofa_acc_sum_gather = ofa_acc_sum.item()
-        #         ofa_acc_cnt_gather = ofa_acc_cnt.item()
-        #         ofa_score_recoder_gather = ofa_score_recoder
+        ofa_acc_sum = torch.FloatTensor([0]).cuda()
+        ofa_acc_cnt = torch.FloatTensor([0]).cuda()
+        ofa_score_recoder = {}
+        with torch.no_grad():
+        
+            for i, batch in enumerate(tqdm(loader, ncols=120, desc="ofa_evaluate", disable=not self.verbose)):
+                sample_dict = {}
+                sample_dict['image_ids'] = batch['image_ids']  # ids is a list of int
+                sample_dict['refBoxes'] = batch['refBoxes']
+                ref_ids = batch['ref_ids']
+        
+                sample_sents = []
+                for ref_id in ref_ids:
+                    sent = generate_res[ref_id]
+                    sample_sents.append(sent)
+        
+                sample_dict['sents'] = sample_sents  # a list of sent
+        
+                if self.args.use_rec:
+                    scores, _, _ = self.critic.compute_score(sample_dict, ofa_test=True, threshold=0.5)
+                    ofa_acc_sum += sum(scores) if scores is not None else 0
+                    ofa_acc_cnt += len(scores) if scores is not None else 0
+        
+                for score, ref_id in zip(scores, ref_ids):
+                    ofa_score_recoder[ref_id] = score.item()
+        
+            if self.args.distributed:
+                dist.barrier()
+        
+                ofa_acc_sum_for_dist = dist_utils.all_gather(ofa_acc_sum.item())
+                ofa_acc_cnt_for_dist = dist_utils.all_gather(ofa_acc_cnt.item())
+                ofa_score_recoder_for_dist = dist_utils.all_gather(ofa_score_recoder)
+                ofa_score_recoder_gather = {}
+                for dict in ofa_score_recoder_for_dist:
+                    ofa_score_recoder_gather.update(dict)
+                ofa_acc_sum_gather = sum(ofa_acc_sum_for_dist)
+                ofa_acc_cnt_gather = sum(ofa_acc_cnt_for_dist)
+            else:
+                ofa_acc_sum_gather = ofa_acc_sum.item()
+                ofa_acc_cnt_gather = ofa_acc_cnt.item()
+                ofa_score_recoder_gather = ofa_score_recoder
 
         result = {}
         if self.verbose:
@@ -901,15 +905,15 @@ class Trainer(TrainerBase2):
             result['CIDErs'] = CIDEr_scs
             result['METEOR'] = METEOR_sc
             result['METEORs'] = METEOR_scs
-            # if self.args.use_rec:
-            #     result['OFA_Acc'] = ofa_acc_sum_gather / ofa_acc_cnt_gather
-            #
-            # print("CIDEr score:{}".format(result['CIDEr']))
-            # print("METEOR score:{}".format(result['METEOR']))
-            # if self.args.use_rec:
-            #     print("OFA_Acc_Score:{}".format(ofa_acc_sum.item() / ofa_acc_cnt.item()))
-            #     print("OFA_Acc_Score_Sum:{}".format(ofa_acc_sum.item()))
-            #     print("OFA_Acc_Score_Cnt:{}".format(ofa_acc_cnt.item()))
+            if self.args.use_rec:
+                result['OFA_Acc'] = ofa_acc_sum_gather / ofa_acc_cnt_gather
+            
+            print("CIDEr score:{}".format(result['CIDEr']))
+            print("METEOR score:{}".format(result['METEOR']))
+            if self.args.use_rec:
+                print("OFA_Acc_Score:{}".format(ofa_acc_sum.item() / ofa_acc_cnt.item()))
+                print("OFA_Acc_Score_Sum:{}".format(ofa_acc_sum.item()))
+                print("OFA_Acc_Score_Cnt:{}".format(ofa_acc_cnt.item()))
 
             # 这块先暂时这样吧，不知道要用什么来决定是否要测多轮的；
             # if self.args.dialog_sp_training:
@@ -988,7 +992,7 @@ def main_worker(gpu, args):
         args,
         refer=refer,
         split=args.valid, mode='val', batch_size=valid_batch_size,
-        distributed=False, gpu=args.gpu,
+        distributed=args.distributed, gpu=args.gpu,
         workers=4,
         topk=args.valid_topk,
     )
@@ -1000,7 +1004,7 @@ def main_worker(gpu, args):
             args,
             refer=refer,
             split=args.test, mode='val', batch_size=valid_batch_size,
-            distributed=False, gpu=args.gpu,
+            distributed=args.distributed, gpu=args.gpu,
             workers=4,
             topk=args.valid_topk,
         )
@@ -1010,7 +1014,7 @@ def main_worker(gpu, args):
             args,
             refer=refer,
             split='testA', mode='val', batch_size=valid_batch_size,
-            distributed=False, gpu=args.gpu,
+            distributed=args.distributed, gpu=args.gpu,
             workers=4,
             topk=args.valid_topk,
         )
@@ -1018,7 +1022,7 @@ def main_worker(gpu, args):
             args,
             refer=refer,
             split='testB', mode='val', batch_size=valid_batch_size,
-            distributed=False, gpu=args.gpu,
+            distributed=args.distributed, gpu=args.gpu,
             workers=4,
             topk=args.valid_topk,
         )

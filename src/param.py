@@ -163,7 +163,7 @@ def parse_args(parse=True, **optional_kwargs):
     # MMI training
     parser.add_argument('--use_mmi', action='store_true')
     parser.add_argument('--lama', type=float, default=1)
-    parser.add_argument('--margin', type=float, default=0.5)
+    parser.add_argument('--mmi_margin', type=float, default=0.5)
 
     # RL training
     parser.add_argument('--rl_training', action='store_true')
@@ -196,6 +196,12 @@ def parse_args(parse=True, **optional_kwargs):
     parser.add_argument("--bad_res_path", type=str, default=None, help="the path of bad referring expression collected by REC")
     parser.add_argument("--use_detector", action='store_true')
 
+    # bootstrap training
+    parser.add_argument("--use_bootstrap", action='store_true')
+    parser.add_argument("--bootstrap_data", type=str, default=None, help="assign the path of bootstrap data")
+    parser.add_argument("--use_negative_text_training", action='store_true')
+    parser.add_argument("--negative_text_training_data", type=str, default=None, help="assign the path of bootstrap data")
+    
     # Parse the arguments.
     if parse:
         args = parser.parse_args()

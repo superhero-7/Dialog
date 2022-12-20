@@ -1,4 +1,6 @@
 import random
+from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader, Dataset, Sampler
 
 class MultiTaskLoader(object):
 
@@ -58,3 +60,39 @@ class MultiTaskLoader(object):
 
     def __len__(self):
         return len(self.epoch_tasks)
+
+
+def get_loader(dataset=None, split='train', mode='train', task=None,
+               batch_size=32, workers=4, distributed=False,
+               ):
+
+    if distributed and mode == 'train':
+        sampler = DistributedSampler(dataset)
+    elif distributed and not (mode == 'train'):
+        sampler = DistributedSampler(dataset, drop_last=True)
+    else:
+        sampler = None
+
+    if mode == 'train':
+        # shuffle与sampler是不能共存的
+        loader = DataLoader(
+            dataset, batch_size=batch_size, shuffle=(sampler is None),
+            num_workers=workers, pin_memory=True, sampler=sampler,
+            collate_fn=dataset.collate_fn)
+    else:
+        loader = DataLoader(
+            dataset,
+            batch_size=batch_size, shuffle=False,
+            num_workers=workers, pin_memory=True,
+            sampler=sampler,
+            collate_fn=dataset.collate_fn,
+            drop_last=False)
+
+    if task is None:
+        loader.task = 'reg'
+    else:
+        loader.task = task
+    loader.split_name = split
+    #loader.evaluator = REGEvaluator()
+
+    return loader

@@ -10,36 +10,34 @@ import os
 from reg import Critic
 
 # 这个函数要把中间的一些变量都拉成输入，尽量写得以后要用方便一点；
-def bad_re_collection(dataset='refcoco+', split='testB', task='REG', epoch=0, lr=None, save_path=None):
+def bad_re_collection(dataset='refcoco+', split='testB', save_path=None, ckpt_path=None):
 
     args = parse_args()
     args.gpu = 0
     args.train = 'val'
     args.num_beams = 5
-    args.batch_size = 4
+    args.batch_size = 24
     args.dataset = dataset
     split_map = {'refcoco+': 'unc',
                  'refcoco': 'unc',
                  'refcocog': 'umd'}
     args.dataset_split = split_map[args.dataset]
-    if lr:
-        args.load = '/raid_sda/yfl/codebase/VL-T5-REG/VL-T5/snap/'+args.dataset+'/' + task + '/' + lr + '/' + str(epoch)
-    else:
-        args.load = '/raid_sda/yfl/codebase/VL-T5-REG/VL-T5/snap/'+args.dataset+'/' + task + '/' + str(epoch)
-    args.rl_training = True
+    args.load = ckpt_path
     args.use_rec = True
     args.experiment_name = task
-    args.dialog_training = True
-    args.dialog_round = 2
-    args.zero_shot_test = True
-    args.last_round = True
     args.mode = 'val'
     args.workers = 8
     args.test_threshold = 0.5
 
+    # args.rl_training = True
+    # args.dialog_training = True
+    # args.dialog_round = 2
+    # args.zero_shot_test = True
+    # args.last_round = True
 
 
-    verbose = (args.gpu == 0)
+
+    verbose = True
 
     refer = REFER(args.dataset, args.dataset_split, verbose=verbose)
 
@@ -47,7 +45,6 @@ def bad_re_collection(dataset='refcoco+', split='testB', task='REG', epoch=0, lr
     dataset = RefCOCOGenerationFineTuneDataset(
         refer=refer,
         split=split,
-        # raw_dataset=_dset,
         rank=args.gpu,
         verbose=verbose,
         args=args,
@@ -150,6 +147,9 @@ def bad_re_collection(dataset='refcoco+', split='testB', task='REG', epoch=0, lr
     # with open(save_path, 'w') as f:
     #     json.dump(ref_ids_2_bad_sents, f)
     # os.makedirs(save_path, exist_ok=True)
+    dir = save_path.rsplit('/',1)[0]
+    os.makedirs(dir, exist_ok=True)
+
     with open(save_path, 'w') as f:
         json.dump(bad_case, f)
 
@@ -209,18 +209,32 @@ class OfaRecTester:
 if __name__ == '__main__':
 
     # task = "REG_mmi"
-    task = 'vlt5_reg'
-    dataset = "refcoco"
+    import argparse
+    parser_outter = argparse.ArgumentParser()
+    parser_outter.add_argument('--dataset', type=str, default="refcoco")
+    args_outter = parser_outter.parse_args()
+    dataset = args_outter.dataset
+    
+    if dataset == 'refcoco':
+        ckpt_path = '/sharefs/baai-mrnd/yfl/codebase/Dialog/snap/refcoco/ddl_reg_baseline/5e-05/BEST'
+    elif dataset == 'refcoco+':
+        ckpt_path = '/sharefs/baai-mrnd/yfl/codebase/Dialog/snap/refcoco+/ddl_reg_baseline/5e-05/BEST'
+    elif dataset == 'refcocog':
+        ckpt_path = '/sharefs/baai-mrnd/yfl/codebase/Dialog/snap/refcocog/ddl_reg_baseline/5e-05/BEST'
+    else:
+        print("Fool! You input a wrong dataset name!")
+
+    task = 'ddl_vlt5_reg_baseline'
     # split = "testA"
     # for split in splits:
     #     for dataset in datasets:
     #         test(dataset=dataset, split=split, task=task, epoch="BEST", save=True)
-    for split in ['testA', 'testB', 'train']:
+    for split in ['train']:
         if split == 'train':
             save_path = './new_generate_sent_set' + '/' + task + '/' + dataset + '/' + task + '_' + dataset + '_bad_sent_threshold_0.5_with_bbox.json'
         else:
             save_path = './new_generate_sent_set' + '/' + task + '/' + dataset + '/' + task + '_' + dataset + '_bad_sent_threshold_0.5_with_bbox_' + split +'.json'
-        bad_re_collection(dataset=dataset, split=split, task=task, epoch='BEST', lr='5e-05', save_path=save_path)
+        bad_re_collection(dataset=dataset, split=split, save_path=save_path, ckpt_path=ckpt_path)
 
     # args = parse_args()
     # args.gpu = 0

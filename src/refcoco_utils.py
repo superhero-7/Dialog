@@ -59,7 +59,7 @@ class REFER:
 			img_dir = Path('/workspace/yfl/datasets')
 		if ref_dir is None:
 			# ref_dir = Path(__file__).resolve().parents[2].joinpath('datasets/RefCOCO')
-			ref_dir = Path('/raid_sda/yfl/datasets/RefCOCO')
+			ref_dir = Path('/sharefs/baai-mrnd/yfl/database/RefCOCO')
 
 		self.DATA_DIR = ref_dir.joinpath(dataset)
 

@@ -4,8 +4,8 @@ import os
 import os.path as osp
 import sys
 
-if osp.join('/raid_sda/yfl/codebase/', 'OFA') not in sys.path:
-    sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/', 'OFA'))
+if osp.join('/sharefs/baai-mrnd/yfl/codebase', 'OFA') not in sys.path:
+    sys.path.insert(0, osp.join('/sharefs/baai-mrnd/yfl/codebase', 'OFA'))
 # if osp.join('/home/yfl/', 'OFA') not in sys.path:
 #     sys.path.insert(0, osp.join('/home/yfl/', 'OFA'))
 
@@ -39,7 +39,7 @@ import json
 
 from param import parse_args
 
-from reg_data import RefCOCOGenerationFineTuneDataset, get_loader
+from reg_data import RefCOCOGenerationFineTuneDataset, DialogREGDataset
 from vlt5_utils import load_state_dict, LossMeter, set_global_logging_level, count_parameters
 import dist_utils
 import wandb
@@ -49,21 +49,21 @@ from refcoco_utils import REFER
 # from memory_profiler import profile
 
 # 一直觉得这种写法看起来就不是很优雅~
-if osp.join('/raid_sda/yfl/codebase/VL-T5-REG/VL-T5/src/', 'refer2/evaluation') not in sys.path:
-    sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/VL-T5-REG/VL-T5/src/', 'refer2/evaluation'))
+if osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src', 'refer2/evaluation') not in sys.path:
+    sys.path.insert(0, osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src', 'refer2/evaluation'))
 # if osp.join('/home/yfl/catr/pyutils', 'refer2', 'evaluation') not in sys.path:
 #     sys.path.insert(0, osp.join('/home/yfl/catr/pyutils', 'refer2', 'evaluation'))
 from refEvaluation import RefEvaluation
 import gc
 
 from copy import deepcopy
-from multitask_reg_data import MultiTaskLoader
+from multitask_reg_data import MultiTaskLoader,get_loader
 
-from error1_data import Error_Task1_Dataset
-from error2_data import Error_Task2_Dataset
+# from error1_data import Error_Task1_Dataset
+# from error2_data import Error_Task2_Dataset
 
-if osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction') not in sys.path:
-    sys.path.insert(0, osp.join('/raid_sda/yfl/codebase/VL-T5-REG/feature_extraction'))
+if osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src/feature_extraction') not in sys.path:
+    sys.path.insert(0, osp.join('/sharefs/baai-mrnd/yfl/codebase/Dialog/src/feature_extraction'))
 
 from detectron2_given_target_box_maxnms import doit, build_model
 import datetime
@@ -103,15 +103,15 @@ class Critic():
         self.use_fp16 = False
 
         # Load pretrained ckpt & config
-        overrides = {"bpe_dir": "/raid_sda/yfl/codebase/OFA/utils/BPE"}
+        overrides = {"bpe_dir": "/sharefs/baai-mrnd/yfl/codebase/OFA/utils/BPE"}
         # overrides = {"bpe_dir": "/home/yfl/OFA/utils/BPE"}
         if self.args.dataset in ['refcoco', 'refcocog']:
-            ofa_checkepoint_path = '/raid_sda/yfl/codebase/OFA/checkpoints/' + \
+            ofa_checkepoint_path = '/sharefs/baai-mrnd/yfl/codebase/OFA/checkpoints/' + \
                                self.args.dataset+'_base_best.pt'
             # ofa_checkepoint_path = '/home/yfl/OFA/checkpoints/' + \
             #                    self.args.dataset+'_base_best.pt'
         elif self.args.dataset =='refcoco+':
-            ofa_checkepoint_path = '/raid_sda/yfl/codebase/OFA/checkpoints/' + \
+            ofa_checkepoint_path = '/sharefs/baai-mrnd/yfl/codebase/OFA/checkpoints/' + \
                                    'refcocoplus' + '_base_best.pt'
             # ofa_checkepoint_path = '/home/yfl/OFA/checkpoints/' + \
             #                        'refcocoplus' + '_base_best.pt'
@@ -216,7 +216,7 @@ class Critic():
         samples = []
 
         for image_id, refBox, sent in zip(image_ids, refBoxes, sents):
-            img_path = '/raid_sda/yfl/datasets/train2014/COCO_train2014_' + str(image_id).zfill(12) + '.jpg'
+            img_path = '/sharefs/baai-mrnd/yfl/database/train2014/train2014/COCO_train2014_' + str(image_id).zfill(12) + '.jpg'
             # img_path = '/home/yfl/datasets/train2014/COCO_train2014_' + str(image_id).zfill(12) + '.jpg'
             image = Image.open(img_path)
             sample = self.construct_sample(image, sent, image_id, refBox)
@@ -577,7 +577,7 @@ class Trainer(TrainerBase2):
                 #         """.format(task_name, task_name, task_name)
                 #     )
             
-            if not self.args.debug and not self.args.no_evaluate:
+            if not self.args.debug and not self.args.no_evaluate and epoch%5==0:
                 valid_results, valid_pred = self.evaluate(self.val_loader)
                 if self.verbose:
                     valid_score = valid_results['CIDEr']
@@ -628,7 +628,7 @@ class Trainer(TrainerBase2):
             self.save("LAST")
 
         # Test Set
-        if not self.args.debug and self.args.no_evaluate:
+        if not self.args.debug:
             wandb_log_dict = {}
             best_path = os.path.join(self.args.output, '19')
             self.load(best_path)
@@ -717,14 +717,14 @@ class Trainer(TrainerBase2):
                                 self.detector,
                                 **gen_kwargs)
                         else:
-                            results = self.model.module.new_test_step(
+                            results = self.model.module.new_task2_test_step(
                                 batch,
                                 self.critic,
                                 None,
                                 self.args.dialog_round,
                                 self.args.last_round,
                                 self.args.test_threshold,
-                                None,
+                                self.detector,
                                 **gen_kwargs)
                     else:
                         results = self.model.module.test_step(
@@ -737,24 +737,24 @@ class Trainer(TrainerBase2):
                 else:
                     if self.args.zero_shot_test:
                         if self.args.refine:
-                            results = self.model.new_test_step(
+                            results = self.model.new_task2_test_step(
                                 batch,
                                 self.critic,
                                 self.refine_model,
                                 self.args.dialog_round,
                                 self.args.last_round,
                                 self.args.test_threshold,
-                                None,
+                                self.detector,
                                 **gen_kwargs)
                         else:
-                            results = self.model.new_test_step(
+                            results = self.model.new_task2_test_step(
                                 batch,
                                 self.critic,
                                 None,
                                 self.args.dialog_round,
                                 self.args.last_round,
                                 self.args.test_threshold,
-                                None,
+                                self.detector,
                                 **gen_kwargs)
                     else:
                         results = self.model.test_step(
@@ -917,7 +917,7 @@ def main_worker(gpu, args):
         verbose = False
     refer = REFER(args.dataset, args.dataset_split, verbose=verbose)
 
-    dialog_dataset = RefCOCOGenerationFineTuneDataset(
+    dialog_dataset = DialogREGDataset(
         refer=refer,
         split=args.train,
         # raw_dataset=_dset,

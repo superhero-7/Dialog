@@ -1,6 +1,6 @@
 # The name of experiment
-export CUDA_VISIBLE_DEVICES=0,1
-name=vlt5_ofa_dialog_sp_training_one_model_with_new_badsents
+export CUDA_VISIBLE_DEVICES=0
+name=vlt5_ofa_dialog_sp_training_one_model_with_new_badsents_plus_feature
 dataset=$2
 split=$3
 
@@ -22,9 +22,9 @@ python -m torch.distributed.launch \
         --num_workers 4 \
         --backbone 't5-base' \
         --output $output \
-        --load snap/$dataset/vlt5_reg/5e-05/BEST \
+        --load /sharefs/baai-mrnd/yfl/codebase/Dialog/snap/refcoco+/vlt5_reg_new/0.0003/LAST \
         --num_beams 5 \
-        --batch_size 128 \
+        --batch_size 256 \
         --valid_batch_size 1 \
         --dataset $dataset \
         --dataset_split $split\
@@ -34,10 +34,11 @@ python -m torch.distributed.launch \
         --use_rec\
         --dialog_round 2 \
         --last_round \
-        --bad_res_path src/new_generate_sent_set/vlt5_reg/$dataset/vlt5_reg_refcoco_bad_sent_threshold_0.5_with_bbox.json  \
+        --bad_res_path /sharefs/baai-mrnd/yfl/codebase/Dialog/src/new_generate_sent_set/vlt5_reg_new/refcoco+/vlt5_reg_new_refcoco+_bad_sent_threshold_0.5_with_bbox_new.json  \
         --test_threshold 0.5 \
         --mode 'train' \
         --dialog_sp_training\
+        --use_detector
         # --no_evaluate \
         # --refine \
         # --combine_with_celoss\

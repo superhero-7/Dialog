@@ -1279,6 +1279,165 @@ class VLT5REG(VLT5):
 
         return result
 
+    def new_task2_test_step(self, batch, rewarder, refine_model=None, dialog_round=5, last_round=False, threshold=0.5, detector=None, **kwargs):
+        '''
+        该函数的功能是在进行第二轮时，分别用task1和task2的方式计算predict，取OFA分数较高者；
+        '''
+
+
+        device = next(self.parameters()).device
+        vis_feats = batch['vis_feats'].to(device)
+        input_ids = batch['input_ids'].to(device)
+        vis_pos = batch['boxes'].to(device)
+        ref_ids = batch['ref_ids']
+        bs = len(ref_ids)  # 这里搞成1就行了
+
+        prefix = "caption region:"
+        visual_token = "<vis_extra_id_36>"
+
+        dialog_generatae_sents = [['']*dialog_round for _ in range(bs)]  # size: bs*num_dialog_round
+        dialog_generatae_sents_ofa_ious = [[-1]*dialog_round for _ in range(bs)]
+        for dialog_round_idx in range(dialog_round):
+            if refine_model==None:
+                if dialog_round_idx==0:
+                    output = self.generate(
+                        input_ids=input_ids,
+                        vis_inputs=(vis_feats, vis_pos),
+                        **kwargs
+                    )
+                else:
+                    # task1_output = self.generate(
+                    #     input_ids=task1_input_ids,
+                    #     vis_inputs=(vis_feats, vis_pos),
+                    #     **kwargs
+                    # )
+
+                    task2_output = self.generate(
+                        input_ids=task2_input_ids,
+                        vis_inputs=(task2_vis_feats, task2_vis_pos),
+                        **kwargs
+                    )
+
+            else:
+                if dialog_round_idx == 0:
+                    output = self.generate(
+                        input_ids=input_ids,
+                        vis_inputs=(vis_feats, vis_pos),
+                        **kwargs
+                    )
+                else:
+                    # task1_output = refine_model.generate(
+                    #     input_ids=task1_input_ids,
+                    #     vis_inputs=(vis_feats, vis_pos),
+                    #     **kwargs
+                    # )
+
+                    task2_output = refine_model.generate(
+                        input_ids=task2_input_ids,
+                        vis_inputs=(task2_vis_feats, task2_vis_pos),
+                        **kwargs
+                    )
+            if dialog_round_idx < (dialog_round-1):
+                output_sents = self.tokenizer.batch_decode(output, skip_special_tokens=True)  # bs*sentence_len
+                for bs_idx, output_sent in enumerate(output_sents):
+                    dialog_generatae_sents[bs_idx][dialog_round_idx] = output_sent
+                sample_dict = {}
+                sample_dict['image_ids'] = batch['image_ids']  # ids is a list of int
+                sample_dict['refBoxes'] = batch['refBoxes']
+                sample_dict['sents'] = output_sents  # a list of sent
+                # rewarder should return a tensor in the shape of bacthsize
+                # sample_rewards: (batch_size, 1)
+                sample_rewards, sample_rewards_mask, det_result = rewarder.compute_score(sample_dict)
+
+                for bs_idx, sample_reward in enumerate(sample_rewards):
+                    dialog_generatae_sents_ofa_ious[bs_idx][dialog_round_idx] = sample_reward.item()
+                # IOU surpass 0.5, the we think it located the target object.
+                if sample_rewards[0] >= threshold:
+                    break
+                # update input ids
+                ofa_box = [det_result[0]['box']]
+                img_path = '/sharefs/baai-mrnd/yfl/database/train2014/train2014/COCO_train2014_' + str(batch['image_ids'][0]).zfill(12) + '.jpg'
+                img = cv2.imread(img_path)
+                instances, ofa_feature = doit(img, np.array(ofa_box), detector)
+                # ofa_feature = torch.from_numpy(ofa_feature)
+                task2_vis_feats = torch.cat((vis_feats[0], ofa_feature), axis=0)
+                task2_vis_feats = task2_vis_feats.unsqueeze(0)
+                ofa_box = torch.tensor(ofa_box).to(device)
+                task2_vis_pos = torch.cat((vis_pos[0], ofa_box), axis=0)
+                task2_vis_pos = task2_vis_pos.unsqueeze(0)
+
+                unlocated = "incorrectly unlocated as"
+                wrong_visual_token = "<vis_exra_id_37>"
+                refine = "Please refine it:"
+                task2_input_text = f'{prefix} {visual_token} {output_sent[0]} {unlocated} {wrong_visual_token} {refine}'
+                # task2_input_text = f'{prefix} {visual_token_38} {} {prefix} {visual_token}'
+                task2_input_ids = self.tokenizer.encode(task2_input_text)
+                task2_input_ids = torch.LongTensor(task2_input_ids).to(device)
+                task2_input_ids = task2_input_ids.unsqueeze(0)
+
+                # task1_input_text = f'{prefix} {visual_token} {output_sents[0]} '
+                # task1_input_ids = self.tokenizer.encode(task1_input_text)
+                # task1_input_ids = torch.LongTensor(task1_input_ids).to(device)
+                # task1_input_ids = task1_input_ids.unsqueeze(0)
+            else:
+                # task1_output_sents = self.tokenizer.batch_decode(task1_output, skip_special_tokens=True)  # bs*sentence_len
+                task2_output_sents = self.tokenizer.batch_decode(task2_output, skip_special_tokens=True)  # bs*sentence_len
+
+                sample_dict = {}
+                sample_dict['image_ids'] = batch['image_ids']  # ids is a list of int
+                sample_dict['refBoxes'] = batch['refBoxes']
+
+                # sample_dict['sents'] = task1_output_sents  # a list of sent
+                # rewarder should return a tensor in the shape of bacthsize
+                # sample_rewards: (batch_size, 1)
+                # task1_sample_rewards, task1_sample_rewards_mask, task1_det_result = rewarder.compute_score(sample_dict)
+
+                sample_dict['sents'] = task2_output_sents
+                task2_sample_rewards, task2_sample_rewards_mask, task2_det_result = rewarder.compute_score(sample_dict)
+
+                # if task1_sample_rewards[0] >= task2_sample_rewards[0]:
+                #     for bs_idx, task1_output_sent in enumerate(task1_output_sents):
+                #         dialog_generatae_sents[bs_idx][dialog_round_idx] = task1_output_sent
+                #     for bs_idx, task1_sample_reward in enumerate(task1_sample_rewards):
+                #         dialog_generatae_sents_ofa_ious[bs_idx][dialog_round_idx] = task1_sample_reward.item()
+                #     output_sents = task1_output_sents
+                # else:
+                #     for bs_idx, task2_output_sent in enumerate(task2_output_sents):
+                #         dialog_generatae_sents[bs_idx][dialog_round_idx] = task2_output_sent
+                #     for bs_idx, task2_sample_reward in enumerate(task2_sample_rewards):
+                #         dialog_generatae_sents_ofa_ious[bs_idx][dialog_round_idx] = task2_sample_reward.item()
+                #     output_sents = task2_output_sents
+
+                for bs_idx, task1_output_sent in enumerate(task2_output_sents):
+                    dialog_generatae_sents[bs_idx][dialog_round_idx] = task1_output_sent
+                for bs_idx, task1_sample_reward in enumerate(task2_sample_rewards):
+                    dialog_generatae_sents_ofa_ious[bs_idx][dialog_round_idx] = task1_sample_reward.item()
+                output_sents = task2_output_sents
+                # IOU surpass 0.5, the we think it located the target object.
+
+            # unlocated_ids = self.tokenizer.encode("unlocated")
+            # unlocated_ids = [unlocated_ids for _ in range(bs)]
+            # unlocated_ids = torch.LongTensor(unlocated_ids)
+            # unlocated_ids = unlocated_ids[:, :-1].to(device)
+            # input_ids = torch.cat((input_ids, output[:, 1:], unlocated_ids), 1)
+
+        # last_round 可以去掉但是我觉得先放在这没事看着还挺爽的
+        if last_round:
+            generated_sents = output_sents
+
+        result = []
+        for bs_idx, sent in enumerate(generated_sents):
+            result.append(
+                {
+                    'ref_id': ref_ids[bs_idx],
+                    'sent': sent,
+                    'dialog_generate_sent': dialog_generatae_sents[bs_idx],
+                    'dialog_generate_sent_ofa_iou': dialog_generatae_sents_ofa_ious[bs_idx],
+                }
+            )
+
+        return result
+
 
 from modeling_bart import VLBart
 class VLBartREG(VLBart):
